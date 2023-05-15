@@ -23,17 +23,19 @@ from cryptography.fernet import Fernet
 VAULT_ADDR = os.environ.get('VAULT_ADDR')
 ROLE_ID = os.environ.get('ROLE_ID')
 SECRET_ID = os.environ.get('SECRET_ID')
+VAULT_SECRET_MOUNT = os.environ.get('VAULT_SECRET_MOUNT')
 VAULT_PREFIX = os.environ.get('VAULT_PREFIX')
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY')
 
 
 class VaultHandler:
-    def __init__(self, url, role_id, secret_id, path, enc_key):
+    def __init__(self, url, role_id, secret_id, path, enc_key, vault_secret_mount):
         self.url = url
         self.role_id = role_id
         self.secret_id = secret_id
         self.path = path
         self.enc_key = enc_key
+        self.vault_secret_mount = vault_secret_mount
         self.client = hvac.Client(url=self.url)
 
         self.client.auth.approle.login(
@@ -44,11 +46,24 @@ class VaultHandler:
         if not self.client.is_authenticated():
             raise Exception('Vault authentication error!')
 
-    def get_secrets_list(self):
-        secrets_list_response = self.client.secrets.kv.v2.list_secrets(
-            path='{}'.format(self.path),
+    def get_secrets_list(self, nested_path=None):
+        top_level_secrets_list_response = self.client.secrets.kv.v2.list_secrets(
+            mount_point=self.vault_secret_mount,
+            path=nested_path if nested_path else '{}'.format(self.path),
         )
-        return secrets_list_response['data']['keys']
+
+        secrets_list_response = []
+
+        for key in top_level_secrets_list_response['data']['keys']:
+            nested_key = '{}{}'.format(nested_path, key) if nested_path else key
+            if key.endswith("/"):
+                nested = self.get_secrets_list(nested_path=nested_key)
+                for nested_key in nested:
+                    secrets_list_response.append(nested_key)
+            else:
+                secrets_list_response.append(nested_key)
+
+        return secrets_list_response
 
     def print_all_secrets_with_metadata(self):
         for key in self.get_secrets_list():
@@ -69,9 +84,7 @@ class VaultHandler:
         return secrets_dict
 
     def get_secret(self, key):
-        return self.client.secrets.kv.v2.read_secret(
-            path='{}/{}'.format(self.path, key),
-        )
+        return self.client.secrets.kv.v2.read_secret(mount_point=self.vault_secret_mount, path='{}/{}'.format(self.path, key))
 
     def print_secrets_nicely(self, secrets_dict={}):
         if not secrets_dict:
@@ -106,6 +119,7 @@ class VaultHandler:
     def _populate_vault_prefix_from_dict(self, secrets_dict, vault_prefix_to_populate):
         for key in secrets_dict:
             self.client.secrets.kv.v2.create_or_update_secret(
+                mount_point=self.vault_secret_mount,
                 path='{}/{}'.format(vault_prefix_to_populate, key),
                 secret=secrets_dict[key],
             )
@@ -139,6 +153,7 @@ def print_secrets(ctx):
     vault = VaultHandler(
         VAULT_ADDR, ROLE_ID, SECRET_ID,
         VAULT_PREFIX, ENCRYPTION_KEY,
+        VAULT_SECRET_MOUNT,
     )
     vault.print_secrets_nicely()
 
@@ -158,6 +173,7 @@ def print_dump(ctx, dump_path):
     vault = VaultHandler(
         VAULT_ADDR, ROLE_ID, SECRET_ID,
         VAULT_PREFIX, ENCRYPTION_KEY,
+        VAULT_SECRET_MOUNT,
     )
     vault.print_secrets_from_encrypted_dump(dump_path)
 
@@ -177,6 +193,7 @@ def dump_secrets(ctx, dump_path):
     vault = VaultHandler(
         VAULT_ADDR, ROLE_ID, SECRET_ID,
         VAULT_PREFIX, ENCRYPTION_KEY,
+        VAULT_SECRET_MOUNT,
     )
     vault.dump_all_secrets(dump_path)
 
@@ -202,6 +219,7 @@ def populate_vault_prefix(ctx, vault_prefix, dump_path):
     vault = VaultHandler(
         VAULT_ADDR, ROLE_ID, SECRET_ID,
         VAULT_PREFIX, ENCRYPTION_KEY,
+        VAULT_SECRET_MOUNT,
     )
     vault.populate_vault_from_dump(vault_prefix, dump_path)
 
