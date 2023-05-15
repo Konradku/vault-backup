@@ -6,10 +6,11 @@
 #
 # ENV variables:
 # VAULT_ADDR: for example: 'http://vault.vault.svc.cluster.local:8200' for k8s cluster
-# ROLE_ID: RoleID for AppRole auth
-# SECRET_ID: SecretID for AppRole auth
-# VAULT_PREFIX: for example 'jenkins'
-# DUMP_ENCRYPTION_PASSWORD: password which will be used for secrets dump encryption
+# ROLE_ID:  RoleID for AppRole auth
+# SECRET_ID:  SecretID for AppRole auth
+# VAULT_PREFIX: for example 'jenkins', defaults to '/'
+# ENCRYPTION_KEY: encryption key(used by Fernet library) to encrypt your secrets dump (can be generated with e.g. `dd if=/dev/urandom bs=32 count=1 2>/dev/null | openssl base64`)
+# VAULT_SECRET_MOUNT: vault secret mount name, defaults to 'secret'
 #
 # Copyright (c) 2021 Igor Zhivilo <igor.zhivilo@gmail.com>
 # Licensed under the MIT License
@@ -23,8 +24,8 @@ from cryptography.fernet import Fernet
 VAULT_ADDR = os.environ.get('VAULT_ADDR')
 ROLE_ID = os.environ.get('ROLE_ID')
 SECRET_ID = os.environ.get('SECRET_ID')
-VAULT_SECRET_MOUNT = os.environ.get('VAULT_SECRET_MOUNT')
-VAULT_PREFIX = os.environ.get('VAULT_PREFIX')
+VAULT_SECRET_MOUNT = os.environ.get('VAULT_SECRET_MOUNT', 'secret')
+VAULT_PREFIX = os.environ.get('VAULT_PREFIX', '/')
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY')
 
 

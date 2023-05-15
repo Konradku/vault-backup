@@ -109,8 +109,9 @@ vault write auth/approle/login \
 * VAULT_ADDR: for example: 'http://vault.vault.svc.cluster.local:8200' for k8s cluster
 * ROLE_ID:  RoleID for AppRole auth
 * SECRET_ID:  SecretID for AppRole auth
-* VAULT_PREFIX: for example 'jenkins'
-* ENCRYPTION_KEY: encryption key(used by Fernet library) to encrypt your secrets dump
+* VAULT_PREFIX: for example 'jenkins', defaults to '/'
+* ENCRYPTION_KEY: encryption key(used by Fernet library) to encrypt your secrets dump (can be generated with e.g. `dd if=/dev/urandom bs=32 count=1 2>/dev/null | openssl base64`)
+* VAULT_SECRET_MOUNT: vault secret mount name, defaults to 'secret'
 <!-- markdown-link-check-enable -->
 
 ## Dump secrets under 'jenkins' vault prefix example
