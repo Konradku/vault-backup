@@ -43,7 +43,7 @@ class VaultHandler:
         self.vault_secret_mount = vault_secret_mount
         self.client = hvac.Client(url=self.url)
 
-        if VAULT_TOKEN != '':
+        if self.vault_token != '':
             self.client.token = self.vault_token
         else:
             self.client.auth.approle.login(
