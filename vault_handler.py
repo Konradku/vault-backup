@@ -54,35 +54,42 @@ class VaultHandler:
         if not self.client.is_authenticated():
             raise Exception('Vault authentication error!')
 
-    def get_secrets_list(self, nested_path=None):
-        top_level_secrets_list_response = self.client.secrets.kv.v2.list_secrets(
-            mount_point=self.vault_secret_mount,
-            path=nested_path if nested_path else '{}'.format(self.path),
-        )
-
+    def get_secrets_list(self, nested_path):
         secrets_list_response = []
+
+        try:
+            top_level_secrets_list_response = self.client.secrets.kv.v2.list_secrets(
+                mount_point=self.vault_secret_mount,
+                path=nested_path,
+            )
+        except Exception as e:
+            print(e)
+            return secrets_list_response
 
         for key in top_level_secrets_list_response['data']['keys']:
             nested_key = '{}{}'.format(nested_path, key) if nested_path else key
             if key.endswith("/"):
                 nested = self.get_secrets_list(nested_path=nested_key)
-                for nested_key in nested:
-                    secrets_list_response.append(nested_key)
+                for nested_item in nested:
+                    secrets_list_response.append(nested_item)
             else:
                 secrets_list_response.append(nested_key)
 
         return secrets_list_response
 
     def print_all_secrets_with_metadata(self):
-        for key in self.get_secrets_list():
+        for key in self.get_secrets_list(self.path):
             print('\nKey is: {}'.format(key))
             secret_response = self.get_secret(key)
             print(secret_response)
 
     def _secrets_to_dict(self):
         secrets_dict = {}
-        for key in self.get_secrets_list():
+        for key in self.get_secrets_list(self.path):
             secret_response = self.get_secret(key)
+
+            if secret_response is None:
+                continue
 
             secret_data = {}
             for k in secret_response['data']['data'].keys():
@@ -92,7 +99,11 @@ class VaultHandler:
         return secrets_dict
 
     def get_secret(self, key):
-        return self.client.secrets.kv.v2.read_secret(mount_point=self.vault_secret_mount, path='{}/{}'.format(self.path, key))
+        try:
+            return self.client.secrets.kv.v2.read_secret(mount_point=self.vault_secret_mount, path=key)
+        except Exception as e:
+            print(e)
+            return None
 
     def print_secrets_nicely(self, secrets_dict={}):
         if not secrets_dict:
