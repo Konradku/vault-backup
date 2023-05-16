@@ -21,6 +21,7 @@ import click
 import hvac
 from cryptography.fernet import Fernet
 
+VAULT_TOKEN = os.environ.get('VAULT_TOKEN', '')
 VAULT_ADDR = os.environ.get('VAULT_ADDR')
 ROLE_ID = os.environ.get('ROLE_ID')
 SECRET_ID = os.environ.get('SECRET_ID')
@@ -28,21 +29,27 @@ VAULT_SECRET_MOUNT = os.environ.get('VAULT_SECRET_MOUNT', 'secret')
 VAULT_PREFIX = os.environ.get('VAULT_PREFIX', '/')
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY')
 
+vault_instance = None
+
 
 class VaultHandler:
-    def __init__(self, url, role_id, secret_id, path, enc_key, vault_secret_mount):
+    def __init__(self, url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token):
         self.url = url
         self.role_id = role_id
         self.secret_id = secret_id
         self.path = path
         self.enc_key = enc_key
+        self.vault_token = vault_token
         self.vault_secret_mount = vault_secret_mount
         self.client = hvac.Client(url=self.url)
 
-        self.client.auth.approle.login(
-            role_id=self.role_id,
-            secret_id=self.secret_id,
-        )
+        if VAULT_TOKEN != '':
+            self.client.token = self.vault_token
+        else:
+            self.client.auth.approle.login(
+                role_id=self.role_id,
+                secret_id=self.secret_id,
+            )
 
         if not self.client.is_authenticated():
             raise Exception('Vault authentication error!')
@@ -151,12 +158,7 @@ def print_secrets(ctx):
     """
     Print secrets nicely.
     """
-    vault = VaultHandler(
-        VAULT_ADDR, ROLE_ID, SECRET_ID,
-        VAULT_PREFIX, ENCRYPTION_KEY,
-        VAULT_SECRET_MOUNT,
-    )
-    vault.print_secrets_nicely()
+    vault_instance.print_secrets_nicely()
 
 
 @main.command('print-dump')
@@ -171,12 +173,7 @@ def print_dump(ctx, dump_path):
     """
     Print secrets from encrypted dump.
     """
-    vault = VaultHandler(
-        VAULT_ADDR, ROLE_ID, SECRET_ID,
-        VAULT_PREFIX, ENCRYPTION_KEY,
-        VAULT_SECRET_MOUNT,
-    )
-    vault.print_secrets_from_encrypted_dump(dump_path)
+    vault_instance.print_secrets_from_encrypted_dump(dump_path)
 
 
 @main.command('dump')
@@ -191,12 +188,7 @@ def dump_secrets(ctx, dump_path):
     """
     Dump secrets from Vault.
     """
-    vault = VaultHandler(
-        VAULT_ADDR, ROLE_ID, SECRET_ID,
-        VAULT_PREFIX, ENCRYPTION_KEY,
-        VAULT_SECRET_MOUNT,
-    )
-    vault.dump_all_secrets(dump_path)
+    vault_instance.dump_all_secrets(dump_path)
 
 
 @main.command('populate')
@@ -217,14 +209,14 @@ def populate_vault_prefix(ctx, vault_prefix, dump_path):
     """
     Populate Vault prefix from dump with secrets.
     """
-    vault = VaultHandler(
-        VAULT_ADDR, ROLE_ID, SECRET_ID,
-        VAULT_PREFIX, ENCRYPTION_KEY,
-        VAULT_SECRET_MOUNT,
-    )
-    vault.populate_vault_from_dump(vault_prefix, dump_path)
+    vault_instance.populate_vault_from_dump(vault_prefix, dump_path)
 
 
 # pylint:disable=no-value-for-parameter
 if __name__ == '__main__':
+    vault_instance = VaultHandler(
+        VAULT_ADDR, ROLE_ID, SECRET_ID,
+        VAULT_PREFIX, ENCRYPTION_KEY,
+        VAULT_SECRET_MOUNT, VAULT_TOKEN,
+    )
     main(obj={})
