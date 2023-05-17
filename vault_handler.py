@@ -60,23 +60,27 @@ class VaultHandler:
     def read(self):
         ...
 
-    def to_json(self, get, read):
+    @staticmethod
+    def to_json(get, read):
         dictionary = {}
         for key in get():
             response = read(key)
             dictionary[key] = response
 
         return json.dumps(dictionary)
+    
+    def print(self):
+        print(self.to_json(self.get, self.read))
 
-    def dump(self, get, read, dump_path):
-        json = self.to_json(get, read)
+    def dump(self, dump_path):
+        json = self.to_json(self.get, self.read)
         with open(dump_path, 'w') as file:
             file.write(json)
 
 
 class Secrets(VaultHandler):
-    def __init__(self, url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token):
-        super().__init__(url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def get_secrets_list(self, nested_path):
         secrets_list_response = []
@@ -175,53 +179,50 @@ class Secrets(VaultHandler):
 
 
 class Policies(VaultHandler):
-    def __init__(self, url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token):
-        super().__init__(url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-    def get_policies_list(self):
+    def get(self):
         policies_list_response = self.client.sys.list_policies()['data']['policies']
         return policies_list_response
 
-    def read_policy(self, policy_name):
+    def read(self, policy_name):
         return self.client.sys.read_policy(name=policy_name)['data']['rules']
-
-    def print_policies_dict(self):
-        print(self.policies_to_dict())
 
 
 class AwsRoles(VaultHandler):
-    def __init__(self, url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token):
-        super().__init__(url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-    def get_aws_roles(self):
+    def get(self):
         aws_roles_list = self.client.auth.aws.list_roles()
         return aws_roles_list['keys']
 
-    def read_aws_role(self, role_name):
+    def read(self, role_name):
         return self.client.auth.aws.read_role(role_name)
 
 
 class AwsStsRoles(VaultHandler):
-    def __init__(self, url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token):
-        super().__init__(url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token)
+    def __init__(self, *args, **kwargs):
+        super().__init__(url, *args, **kwargs)
 
-    def get_aws_sts_roles(self):
+    def get(self):
         aws_sts_roles_list = self.client.auth.aws.list_sts_roles()
         return aws_sts_roles_list['keys']
 
-    def read_aws_sts_role(self, account_id):
+    def read(self, account_id):
         return self.client.auth.aws.read_sts_role(account_id)
 
 
 class Approles(VaultHandler):
-    def __init__(self, url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token):
-        super().__init__(url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-    def get_approles(self):
+    def get(self):
         approles_list = self.client.auth.approle.list_roles()
         return approles_list['data']['keys']
 
-    def read_approle(self, role_name):
+    def read(self, role_name):
         return self.client.auth.approle.read_role(role_name)
 
 
@@ -305,7 +306,12 @@ def print_vault_policies(ctx):
     """
     Print vault policies as dictionary.
     """
-    vault_instance.print_policies_dict()
+    policies = Policies(
+        VAULT_ADDR, ROLE_ID, SECRET_ID,
+        VAULT_PREFIX, ENCRYPTION_KEY,
+        VAULT_SECRET_MOUNT, VAULT_TOKEN,
+    )
+    policies.print()
 
 
 @main.command('dump-policies')
@@ -313,7 +319,7 @@ def print_vault_policies(ctx):
 @click.option(
     '--dump_path', '-dp',
     type=str,
-    default='vault_policies.json',
+    default='vault_policies_test.json',
     help='Path/name of dump with policies',
 )
 def dump_vault_policies(ctx, dump_path):
@@ -325,7 +331,7 @@ def dump_vault_policies(ctx, dump_path):
         VAULT_PREFIX, ENCRYPTION_KEY,
         VAULT_SECRET_MOUNT, VAULT_TOKEN,
     )
-    policies.dump(policies.get_policies_list, policies.read_policy, dump_path)
+    policies.dump(dump_path)
 
 
 @main.command('dump-aws-roles')
@@ -345,7 +351,7 @@ def dump_aws_roles(ctx, dump_path):
         VAULT_PREFIX, ENCRYPTION_KEY,
         VAULT_SECRET_MOUNT, VAULT_TOKEN,
     )
-    aws_roles.dump(aws_roles.get_aws_roles, aws_roles.read_aws_role, dump_path)
+    aws_roles.dump(dump_path)
 
 
 @main.command('dump-aws-sts-roles')
@@ -365,7 +371,7 @@ def dump_aws_sts_roles(ctx, dump_path):
         VAULT_PREFIX, ENCRYPTION_KEY,
         VAULT_SECRET_MOUNT, VAULT_TOKEN,
     )
-    aws_sts_roles.dump(aws_sts_roles.get_aws_sts_roles, aws_sts_roles.read_aws_sts_role, dump_path)
+    aws_sts_roles.dump(dump_path)
 
 
 @main.command('dump-approles')
@@ -385,7 +391,7 @@ def click_dump_approles(ctx, dump_path):
         VAULT_PREFIX, ENCRYPTION_KEY,
         VAULT_SECRET_MOUNT, VAULT_TOKEN,
     )
-    approles.dump(approles.get_approles, approles.read_approle, dump_path)
+    approles.dump(dump_path)
 
 
 # pylint:disable=no-value-for-parameter
