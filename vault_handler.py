@@ -54,6 +54,30 @@ class VaultHandler:
         if not self.client.is_authenticated():
             raise Exception('Vault authentication error!')
 
+    def get(self):
+        ...
+
+    def read(self):
+        ...
+
+    def to_json(self, get, read):
+        dictionary = {}
+        for key in get():
+            response = read(key)
+            dictionary[key] = response
+
+        return json.dumps(dictionary)
+
+    def dump(self, get, read, dump_path):
+        json = self.to_json(get, read)
+        with open(dump_path, 'w') as file:
+            file.write(json)
+
+
+class Secrets(VaultHandler):
+    def __init__(self, url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token):
+        super().__init__(url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token)
+
     def get_secrets_list(self, nested_path):
         secrets_list_response = []
 
@@ -150,10 +174,62 @@ class VaultHandler:
         )
 
 
+class Policies(VaultHandler):
+    def __init__(self, url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token):
+        super().__init__(url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token)
+
+    def get_policies_list(self):
+        policies_list_response = self.client.sys.list_policies()['data']['policies']
+        return policies_list_response
+
+    def read_policy(self, policy_name):
+        return self.client.sys.read_policy(name=policy_name)['data']['rules']
+
+    def print_policies_dict(self):
+        print(self.policies_to_dict())
+
+
+class AwsRoles(VaultHandler):
+    def __init__(self, url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token):
+        super().__init__(url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token)
+
+    def get_aws_roles(self):
+        aws_roles_list = self.client.auth.aws.list_roles()
+        return aws_roles_list['keys']
+
+    def read_aws_role(self, role_name):
+        return self.client.auth.aws.read_role(role_name)
+
+
+class AwsStsRoles(VaultHandler):
+    def __init__(self, url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token):
+        super().__init__(url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token)
+
+    def get_aws_sts_roles(self):
+        aws_sts_roles_list = self.client.auth.aws.list_sts_roles()
+        return aws_sts_roles_list['keys']
+
+    def read_aws_sts_role(self, account_id):
+        return self.client.auth.aws.read_sts_role(account_id)
+
+
+class Approles(VaultHandler):
+    def __init__(self, url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token):
+        super().__init__(url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token)
+
+    def get_approles(self):
+        approles_list = self.client.auth.approle.list_roles()
+        return approles_list['data']['keys']
+
+    def read_approle(self, role_name):
+        return self.client.auth.approle.read_role(role_name)
+
+
 @click.group(invoke_without_command=True)
 @click.pass_context
 def main(ctx):
-    group_commands = ['print', 'print-dump', 'dump', 'populate']
+    group_commands = ['print', 'print-dump', 'dump', 'populate', 'print-policies', 'dump-policies', 'dump-aws-roles',
+                      'dump-aws-sts-roles', 'dump-approles']
     """
     VaultHandler is a command line tool that helps dump/populate secrets of HashiCorp's Vault
     """
@@ -223,9 +299,98 @@ def populate_vault_prefix(ctx, vault_prefix, dump_path):
     vault_instance.populate_vault_from_dump(vault_prefix, dump_path)
 
 
+@main.command('print-policies')
+@click.pass_context
+def print_vault_policies(ctx):
+    """
+    Print vault policies as dictionary.
+    """
+    vault_instance.print_policies_dict()
+
+
+@main.command('dump-policies')
+@click.pass_context
+@click.option(
+    '--dump_path', '-dp',
+    type=str,
+    default='vault_policies.json',
+    help='Path/name of dump with policies',
+)
+def dump_vault_policies(ctx, dump_path):
+    """
+    Dump policies from Vault.
+    """
+    policies = Policies(
+        VAULT_ADDR, ROLE_ID, SECRET_ID,
+        VAULT_PREFIX, ENCRYPTION_KEY,
+        VAULT_SECRET_MOUNT, VAULT_TOKEN,
+    )
+    policies.dump(policies.get_policies_list, policies.read_policy, dump_path)
+
+
+@main.command('dump-aws-roles')
+@click.pass_context
+@click.option(
+    '--dump_path', '-dp',
+    type=str,
+    default='aws-roles.json',
+    help='Path/name of dump with aws roles',
+)
+def dump_aws_roles(ctx, dump_path):
+    """
+    Dump aws roles from Vault.
+    """
+    aws_roles = AwsRoles(
+        VAULT_ADDR, ROLE_ID, SECRET_ID,
+        VAULT_PREFIX, ENCRYPTION_KEY,
+        VAULT_SECRET_MOUNT, VAULT_TOKEN,
+    )
+    aws_roles.dump(aws_roles.get_aws_roles, aws_roles.read_aws_role, dump_path)
+
+
+@main.command('dump-aws-sts-roles')
+@click.pass_context
+@click.option(
+    '--dump_path', '-dp',
+    type=str,
+    default='aws-sts-roles.json',
+    help='Path/name of dump with aws sts roles',
+)
+def dump_aws_sts_roles(ctx, dump_path):
+    """
+    Dump aws sts roles from Vault.
+    """
+    aws_sts_roles = AwsStsRoles(
+        VAULT_ADDR, ROLE_ID, SECRET_ID,
+        VAULT_PREFIX, ENCRYPTION_KEY,
+        VAULT_SECRET_MOUNT, VAULT_TOKEN,
+    )
+    aws_sts_roles.dump(aws_sts_roles.get_aws_sts_roles, aws_sts_roles.read_aws_sts_role, dump_path)
+
+
+@main.command('dump-approles')
+@click.pass_context
+@click.option(
+    '--dump_path', '-dp',
+    type=str,
+    default='approles.json',
+    help='Path/name of dump with approles',
+)
+def click_dump_approles(ctx, dump_path):
+    """
+    Dump approles from Vault.
+    """
+    approles = Approles(
+        VAULT_ADDR, ROLE_ID, SECRET_ID,
+        VAULT_PREFIX, ENCRYPTION_KEY,
+        VAULT_SECRET_MOUNT, VAULT_TOKEN,
+    )
+    approles.dump(approles.get_approles, approles.read_approle, dump_path)
+
+
 # pylint:disable=no-value-for-parameter
 if __name__ == '__main__':
-    vault_instance = VaultHandler(
+    vault_instance = Secrets(
         VAULT_ADDR, ROLE_ID, SECRET_ID,
         VAULT_PREFIX, ENCRYPTION_KEY,
         VAULT_SECRET_MOUNT, VAULT_TOKEN,
