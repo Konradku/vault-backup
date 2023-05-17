@@ -31,6 +31,16 @@ ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY')
 
 vault_instance = None
 
+config = {
+    "url": VAULT_ADDR,
+    "role_id": ROLE_ID,
+    "secret_id": SECRET_ID,
+    "path": VAULT_PREFIX,
+    "enc_key": ENCRYPTION_KEY,
+    "vault_secret_mount": VAULT_SECRET_MOUNT,
+    "vault_token": VAULT_TOKEN,
+}
+
 
 class VaultHandler:
     def __init__(self, url, role_id, secret_id, path, enc_key, vault_secret_mount, vault_token):
@@ -306,11 +316,7 @@ def print_vault_policies(ctx):
     """
     Print vault policies as dictionary.
     """
-    policies = Policies(
-        VAULT_ADDR, ROLE_ID, SECRET_ID,
-        VAULT_PREFIX, ENCRYPTION_KEY,
-        VAULT_SECRET_MOUNT, VAULT_TOKEN,
-    )
+    policies = Policies(**config)
     policies.print()
 
 
@@ -326,11 +332,7 @@ def dump_vault_policies(ctx, dump_path):
     """
     Dump policies from Vault.
     """
-    policies = Policies(
-        VAULT_ADDR, ROLE_ID, SECRET_ID,
-        VAULT_PREFIX, ENCRYPTION_KEY,
-        VAULT_SECRET_MOUNT, VAULT_TOKEN,
-    )
+    policies = Policies(**config)
     policies.dump(dump_path)
 
 
@@ -346,11 +348,7 @@ def dump_aws_roles(ctx, dump_path):
     """
     Dump aws roles from Vault.
     """
-    aws_roles = AwsRoles(
-        VAULT_ADDR, ROLE_ID, SECRET_ID,
-        VAULT_PREFIX, ENCRYPTION_KEY,
-        VAULT_SECRET_MOUNT, VAULT_TOKEN,
-    )
+    aws_roles = AwsRoles(**config)
     aws_roles.dump(dump_path)
 
 
@@ -366,11 +364,7 @@ def dump_aws_sts_roles(ctx, dump_path):
     """
     Dump aws sts roles from Vault.
     """
-    aws_sts_roles = AwsStsRoles(
-        VAULT_ADDR, ROLE_ID, SECRET_ID,
-        VAULT_PREFIX, ENCRYPTION_KEY,
-        VAULT_SECRET_MOUNT, VAULT_TOKEN,
-    )
+    aws_sts_roles = AwsStsRoles(**config)
     aws_sts_roles.dump(dump_path)
 
 
@@ -386,19 +380,11 @@ def click_dump_approles(ctx, dump_path):
     """
     Dump approles from Vault.
     """
-    approles = Approles(
-        VAULT_ADDR, ROLE_ID, SECRET_ID,
-        VAULT_PREFIX, ENCRYPTION_KEY,
-        VAULT_SECRET_MOUNT, VAULT_TOKEN,
-    )
+    approles = Approles(**config)
     approles.dump(dump_path)
 
 
 # pylint:disable=no-value-for-parameter
 if __name__ == '__main__':
-    vault_instance = Secrets(
-        VAULT_ADDR, ROLE_ID, SECRET_ID,
-        VAULT_PREFIX, ENCRYPTION_KEY,
-        VAULT_SECRET_MOUNT, VAULT_TOKEN,
-    )
+    vault_instance = Secrets(**config)
     main(obj={})
