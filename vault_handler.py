@@ -87,6 +87,12 @@ class VaultHandler:
         with open(dump_path, 'w') as file:
             file.write(json)
 
+    def load(self, path_to_dump):
+        with open(path_to_dump, 'r') as file:
+            data = file.read()
+        data_dict = json.loads(data)
+        return data_dict
+
 
 class Secrets(VaultHandler):
     def __init__(self, *args, **kwargs):
@@ -198,6 +204,13 @@ class Policies(VaultHandler):
 
     def read(self, policy_name):
         return self.client.sys.read_policy(name=policy_name)['data']['rules']
+    
+    def populate(self, path_to_dump):
+        for key, value in self.load(path_to_dump).items():
+            if key == 'root':
+                continue
+            self.client.sys.create_or_update_policy(name=key, policy=value)
+
 
 
 class AwsRoles(VaultHandler):
@@ -210,11 +223,38 @@ class AwsRoles(VaultHandler):
 
     def read(self, role_name):
         return self.client.auth.aws.read_role(role_name)
+    
+    def populate(self, path_to_dump):
+        for key, value in self.load(path_to_dump).items():
+            self.client.auth.aws.create_role(
+                role=key,
+                auth_type=value['auth_type'],
+                bound_ami_id=value['bound_ami_id'],
+                bound_account_id=value['bound_account_id'],
+                bound_region=value['bound_region'],
+                bound_vpc_id=value['bound_vpc_id'],
+                bound_subnet_id=value['bound_subnet_id'],
+                bound_iam_role_arn=value['bound_iam_role_arn'],
+                bound_iam_instance_profile_arn=value['bound_iam_instance_profile_arn'],
+                bound_ec2_instance_id=value['bound_ec2_instance_id'],
+                role_tag=value['role_tag'],
+                bound_iam_principal_arn=value['bound_iam_principal_arn'],
+                inferred_entity_type=value['inferred_entity_type'],
+                inferred_aws_region=value['inferred_aws_region'],
+                resolve_aws_unique_ids=value['resolve_aws_unique_ids'],
+                ttl=value['token_ttl'],
+                max_ttl=value['token_max_ttl'],
+                period=value['token_period'],
+                policies=value['token_policies'],
+                allow_instance_migration=value['allow_instance_migration'],
+                disallow_reauthentication=value['disallow_reauthentication'],
+                mount_point='aws'
+                )
 
 
 class AwsStsRoles(VaultHandler):
     def __init__(self, *args, **kwargs):
-        super().__init__(url, *args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def get(self):
         aws_sts_roles_list = self.client.auth.aws.list_sts_roles()
@@ -222,6 +262,10 @@ class AwsStsRoles(VaultHandler):
 
     def read(self, account_id):
         return self.client.auth.aws.read_sts_role(account_id)
+    
+    def populate(self, path_to_dump):
+        for key, value in self.load(path_to_dump).items():
+            self.client.auth.aws.create_sts_role(account_id=key, sts_role=value['sts_role'], mount_point='aws')
 
 
 class Approles(VaultHandler):
@@ -233,14 +277,36 @@ class Approles(VaultHandler):
         return approles_list['data']['keys']
 
     def read(self, role_name):
-        return self.client.auth.approle.read_role(role_name)
+        return self.client.auth.approle.read_role(role_name)['data']
+    
+    def populate(self, path_to_dump):
+        for key, value in self.load(path_to_dump).items():
+            self.client.auth.approle.create_or_update_approle(
+                role_name=key,
+                bind_secret_id=value['bind_secret_id'],
+                secret_id_bound_cidrs=value['secret_id_bound_cidrs'],
+                secret_id_num_uses=value['secret_id_num_uses'],
+                secret_id_ttl=value['secret_id_ttl'],
+                enable_local_secret_ids=value['local_secret_ids'],
+                token_ttl=value['token_ttl'],
+                token_max_ttl=value['token_max_ttl'],
+                token_policies=value['token_policies'],
+                token_bound_cidrs=value['token_bound_cidrs'],
+                token_explicit_max_ttl=value['token_explicit_max_ttl'],
+                token_no_default_policy=value['token_no_default_policy'],
+                token_num_uses=value['token_num_uses'],
+                token_period=value['token_period'],
+                token_type=value['token_type'],
+                mount_point='approle'
+                )
 
 
 @click.group(invoke_without_command=True)
 @click.pass_context
 def main(ctx):
-    group_commands = ['print', 'print-dump', 'dump', 'populate', 'print-policies', 'dump-policies', 'dump-aws-roles',
-                      'dump-aws-sts-roles', 'dump-approles']
+    group_commands = ['print-secrets', 'print-dump-secrets', 'dump-secrets', 'populate-secrets', 'print-policies', 'dump-policies', 'populate-policies', 
+                      'dump-aws-roles', 'populate-aws-roles', 'dump-aws-sts-roles', 'populate-aws-sts-roles', 'dump-approles',
+                      'populate-approles']
     """
     VaultHandler is a command line tool that helps dump/populate secrets of HashiCorp's Vault
     """
@@ -250,7 +316,7 @@ def main(ctx):
         print(*group_commands, sep='\n')
 
 
-@main.command('print')
+@main.command('print-secrets')
 @click.pass_context
 def print_secrets(ctx):
     """
@@ -259,7 +325,7 @@ def print_secrets(ctx):
     vault_instance.print_secrets_nicely()
 
 
-@main.command('print-dump')
+@main.command('print-dump-secrets')
 @click.pass_context
 @click.option(
     '--dump_path', '-dp',
@@ -274,7 +340,7 @@ def print_dump(ctx, dump_path):
     vault_instance.print_secrets_from_encrypted_dump(dump_path)
 
 
-@main.command('dump')
+@main.command('dump-secrets')
 @click.pass_context
 @click.option(
     '--dump_path', '-dp',
@@ -289,7 +355,7 @@ def dump_secrets(ctx, dump_path):
     vault_instance.dump_all_secrets(dump_path)
 
 
-@main.command('populate')
+@main.command('populate-secrets')
 @click.pass_context
 @click.option(
     '--vault_prefix', '-vp',
@@ -314,7 +380,7 @@ def populate_vault_prefix(ctx, vault_prefix, dump_path):
 @click.pass_context
 def print_vault_policies(ctx):
     """
-    Print vault policies as dictionary.
+    Print vault policies.
     """
     policies = Policies(**config)
     policies.print()
@@ -325,7 +391,7 @@ def print_vault_policies(ctx):
 @click.option(
     '--dump_path', '-dp',
     type=str,
-    default='vault_policies_test.json',
+    default='vault_policies.json',
     help='Path/name of dump with policies',
 )
 def dump_vault_policies(ctx, dump_path):
@@ -335,13 +401,28 @@ def dump_vault_policies(ctx, dump_path):
     policies = Policies(**config)
     policies.dump(dump_path)
 
+@main.command('populate-policies')
+@click.pass_context
+@click.option(
+    '--dump_path', '-dp',
+    type=str,
+    default='vault_policies.json',
+    help='Path/name of policies file',
+)
+def populate_policies(ctx, dump_path):
+    """
+    Populate Vault with policies.
+    """
+    policies = Policies(**config)
+    policies.populate(dump_path)
+
 
 @main.command('dump-aws-roles')
 @click.pass_context
 @click.option(
     '--dump_path', '-dp',
     type=str,
-    default='aws-roles.json',
+    default='aws_roles.json',
     help='Path/name of dump with aws roles',
 )
 def dump_aws_roles(ctx, dump_path):
@@ -351,13 +432,27 @@ def dump_aws_roles(ctx, dump_path):
     aws_roles = AwsRoles(**config)
     aws_roles.dump(dump_path)
 
+@main.command('populate-aws-roles')
+@click.pass_context
+@click.option(
+    '--dump_path', '-dp',
+    type=str,
+    default='aws_roles.json',
+    help='Path/name of aws roles file',
+)
+def populate_aws_roles(ctx, dump_path):
+    """
+    Populate Vault with aws roles.
+    """
+    aws_roles = AwsRoles(**config)
+    aws_roles.populate(dump_path)
 
 @main.command('dump-aws-sts-roles')
 @click.pass_context
 @click.option(
     '--dump_path', '-dp',
     type=str,
-    default='aws-sts-roles.json',
+    default='aws_sts_roles.json',
     help='Path/name of dump with aws sts roles',
 )
 def dump_aws_sts_roles(ctx, dump_path):
@@ -367,6 +462,20 @@ def dump_aws_sts_roles(ctx, dump_path):
     aws_sts_roles = AwsStsRoles(**config)
     aws_sts_roles.dump(dump_path)
 
+@main.command('populate-aws-sts-roles')
+@click.pass_context
+@click.option(
+    '--dump_path', '-dp',
+    type=str,
+    default='aws_sts_roles.json',
+    help='Path/name of dump with aws sts roles',
+)
+def populate_aws_sts_roles(ctx, dump_path):
+    """
+    Populate Vault with aws sts roles.
+    """
+    aws_sts_roles = AwsStsRoles(**config)
+    aws_sts_roles.populate(dump_path)
 
 @main.command('dump-approles')
 @click.pass_context
@@ -383,6 +492,20 @@ def click_dump_approles(ctx, dump_path):
     approles = Approles(**config)
     approles.dump(dump_path)
 
+@main.command('populate-approles')
+@click.pass_context
+@click.option(
+    '--dump_path', '-dp',
+    type=str,
+    default='approles.json',
+    help='Path/name of dump with approles',
+)
+def populate_approles(ctx, dump_path):
+    """
+    Populate Vault with approles.
+    """
+    approles = Approles(**config)
+    approles.populate(dump_path)
 
 # pylint:disable=no-value-for-parameter
 if __name__ == '__main__':
